@@ -1,8 +1,13 @@
-# This file is supposed to be sourced by each Recipe
-# that wants to use the functions contained herein
-# like so:
-# wget -q https://github.com/AppImage/AppImages/raw/${PKG2AICOMMIT}/functions.sh -O ./functions.sh
-# . ./functions.sh
+#!/bin/bash
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  echo "This file is supposed to be sourced by each Recipe"
+  echo "that wants to use the functions contained herein"
+  echo "like so:"
+  echo "wget -q https://github.com/AppImage/AppImages/raw/\${PKG2AICOMMIT}/functions.sh -O ./functions.sh"
+  echo ". ./functions.sh"
+  exit 1
+fi
 
 # RECIPE=$(realpath "$0")
 
@@ -14,20 +19,20 @@ if [ -z "$PKG2AICOMMIT" ] ; then
 fi
 
 # Options for apt-get to use local files rather than the system ones
-OPTIONS="-o Debug::NoLocking=1
--o APT::Cache-Limit=125829120
--o Dir::Etc::sourcelist=./sources.list
--o Dir::State=./tmp
--o Dir::Cache=./tmp
--o Dir::State::status=./status
--o Dir::Etc::sourceparts=-
--o APT::Get::List-Cleanup=0
--o APT::Get::AllowUnauthenticated=1
--o Debug::pkgProblemResolver=true
--o Debug::pkgDepCache::AutoInstall=true
--o APT::Install-Recommends=0
--o APT::Install-Suggests=0
-"
+#OPTIONS="-o Debug::NoLocking=1
+#-o APT::Cache-Limit=125829120
+#-o Dir::Etc::sourcelist=./sources.list
+#-o Dir::State=./tmp
+#-o Dir::Cache=./tmp
+#-o Dir::State::status=./status
+#-o Dir::Etc::sourceparts=-
+#-o APT::Get::List-Cleanup=0
+#-o APT::Get::AllowUnauthenticated=1
+#-o Debug::pkgProblemResolver=true
+#-o Debug::pkgDepCache::AutoInstall=true
+#-o APT::Install-Recommends=0
+#-o APT::Install-Suggests=0
+#"
 
 # Detect system architecture to know which binaries of AppImage tools
 # should be downloaded and used.
@@ -76,14 +81,14 @@ git_pull_rebase_helper()
 # (this requires us to cd ./usr before running the application; AppRun does that)
 patch_usr()
 {
-  find usr/ -type f -executable -exec sed -i -e "s|/usr|././|g" {} \;
+  find usr/ -type f -executable -exec sed -i -e 's|/usr|././|g' {} \;
 }
 
 # Download AppRun and make it executable
 get_apprun()
 {
   TARGET_ARCH=${ARCH:-$SYSTEM_ARCH}
-  wget -c https://github.com/AppImage/AppImageKit/releases/download/continuous/AppRun-${TARGET_ARCH} -O AppRun
+  wget -c "https://github.com/AppImage/AppImageKit/releases/download/continuous/AppRun-${TARGET_ARCH}" -O AppRun
   chmod a+x AppRun
 }
 
@@ -92,14 +97,14 @@ get_apprun()
 copy_deps()
 {
   PWD=$(readlink -f .)
-  FILES=$(find . -type f -executable -or -name *.so.* -or -name *.so | sort | uniq )
+  FILES=$(find . -type f -executable -or -name '*.so.*' -or -name '*.so' | sort | uniq )
   for FILE in $FILES ; do
     ldd "${FILE}" | grep "=>" | awk '{print $3}' | xargs -I '{}' echo '{}' >> DEPSFILE
   done
-  DEPS=$(cat DEPSFILE | sort | uniq)
+  DEPS=$(sort DEPSFILE | uniq)
   for FILE in $DEPS ; do
-    if [ -e $FILE ] && [[ $(readlink -f $FILE)/ != $PWD/* ]] ; then
-      cp -v --parents -rfL $FILE ./ || true
+    if [ -e "$FILE" ] && [[ $(readlink -f "$FILE")/ != "$PWD"/* ]] ; then
+      cp -v --parents -rfL "$FILE" . || true
     fi
   done
   rm -f DEPSFILE
@@ -108,15 +113,15 @@ copy_deps()
 # Move ./lib/ tree to ./usr/lib/
 move_lib()
 {
-  mkdir -p ./usr/lib ./lib && find ./lib/ -exec cp -v --parents -rfL {} ./usr/ \; && rm -rf ./lib
-  mkdir -p ./usr/lib ./lib64 && find ./lib64/ -exec cp -v --parents -rfL {} ./usr/ \; && rm -rf ./lib64
+  mkdir -p ./usr/lib ./lib && find ./lib/ -exec cp -v --parents -rfL '{}' ./usr/ \; && rm -rf ./lib
+  mkdir -p ./usr/lib ./lib64 && find ./lib64/ -exec cp -v --parents -rfL '{}' ./usr/ \; && rm -rf ./lib64
 }
 
 # Delete blacklisted files
 delete_blacklisted()
 {
   BLACKLISTED_FILES=$(cat_file_from_url https://github.com/AppImage/AppImages/raw/${PKG2AICOMMIT}/excludelist | sed 's|#.*||g')
-  echo $BLACKLISTED_FILES
+  echo "$BLACKLISTED_FILES"
   for FILE in $BLACKLISTED_FILES ; do
     FILES="$(find . -name "${FILE}" -not -path "./usr/optional/*")"
     for FOUND in $FILES ; do
@@ -128,24 +133,24 @@ delete_blacklisted()
   rm -rf usr/include || true
   rm -rf usr/lib/cmake || true
   rm -rf usr/lib/pkgconfig || true
-  find . -name '*.la' | xargs -i rm {}
+  find . -name '*.la' -exec rm '{}' \;
 }
 
 # Echo highest glibc version needed by the executable files in the current directory
 glibc_needed()
 {
-  find . -name *.so -or -name *.so.* -or -type f -executable  -exec strings {} \; | grep ^GLIBC_2 | sed s/GLIBC_//g | sort --version-sort | uniq | tail -n 1
-  # find . -name *.so -or -name *.so.* -or -type f -executable  -exec readelf -s '{}' 2>/dev/null \; | sed -n 's/.*@GLIBC_//p'| awk '{print $1}' | sort --version-sort | tail -n 1
+  find . -name '*.so' -or -name '*.so.*' -or -type f -executable  -exec strings {} \; | grep ^GLIBC_2 | sed s/GLIBC_//g | sort --version-sort | uniq | tail -n 1
+  # find . -name '*.so' -or -name '*.so.*' -or -type f -executable  -exec readelf -s '{}' 2>/dev/null \; | sed -n 's/.*@GLIBC_//p'| awk '{print $1}' | sort --version-sort | tail -n 1
 }
 # Add desktop integration
 # Usage: get_desktopintegration name_of_desktop_file_and_exectuable
 get_desktopintegration()
 {
-  REALBIN=$(grep -o "^Exec=.*" *.desktop | sed -e 's|Exec=||g' | cut -d " " -f 1 | head -n 1)
-  cat_file_from_url https://raw.githubusercontent.com/AppImage/AppImageKit/master/desktopintegration > ./usr/bin/$REALBIN.wrapper
-  chmod a+x ./usr/bin/$REALBIN.wrapper
+  REALBIN=$(grep -o '^Exec=.*' ./*.desktop | sed -e 's|Exec=||g' | cut -d " " -f 1 | head -n 1)
+  cat_file_from_url https://raw.githubusercontent.com/AppImage/AppImageKit/master/desktopintegration > "./usr/bin/$REALBIN.wrapper"
+  chmod a+x "./usr/bin/$REALBIN.wrapper"
 
-  sed -i -e "s|^Exec=$REALBIN|Exec=$REALBIN.wrapper|g" $1.desktop
+  sed -i -e "s|^Exec=$REALBIN|Exec=$REALBIN.wrapper|g" "$1.desktop"
 }
 
 # Generate AppImage; this expects $ARCH, $APP and $VERSION to be set
@@ -166,9 +171,9 @@ generate_appimage()
   #
   # Detect the architecture of what we are packaging.
   # The main binary could be a script, so let's use a .so library
-  BIN=$(find . -name *.so* -type f | head -n 1)
+  BIN=$(find . -name '*.so*' -type f | head -n 1)
   INFO=$(file "$BIN")
-  if [ -z $ARCH ] ; then
+  if [ -z "$ARCH" ] ; then
     if [[ $INFO == *"x86-64"* ]] ; then
       ARCH=x86_64
     elif [[ $INFO == *"i686"* ]] ; then
@@ -183,9 +188,9 @@ generate_appimage()
   fi
 
   mkdir -p ../out || true
-  rm ../out/$APP"-"$VERSION".glibc"$GLIBC_NEEDED"-"$ARCH".AppImage" 2>/dev/null || true
+  rm "../out/${APP}-${VERSION}.glibc${GLIBC_NEEDED}-${ARCH}.AppImage" 2>/dev/null || true
   GLIBC_NEEDED=$(glibc_needed)
-  ./AppImageAssistant ./$APP.AppDir/ ../out/$APP"-"$VERSION".glibc"$GLIBC_NEEDED"-"$ARCH".AppImage"
+  ./AppImageAssistant "./$APP.AppDir/" "../out/${APP}-${VERSION}.glibc${GLIBC_NEEDED}-${ARCH}.AppImage"
 }
 
 # Generate AppImage type 2
@@ -220,7 +225,7 @@ generate_type2_appimage()
     trap _appimagetool_cleanup EXIT
   fi
 
-  if [ -z ${NO_GLIBC_VERSION+true} ]; then
+  if [ -z "${NO_GLIBC_VERSION+true}" ]; then
     GLIBC_NEEDED=$(glibc_needed)
     VERSION_EXPANDED=$VERSION.glibc$GLIBC_NEEDED
   else
@@ -229,19 +234,20 @@ generate_type2_appimage()
 
   set +x
   GLIBC_NEEDED=$(glibc_needed)
-  if ( [ ! -z "$KEY" ] ) && ( ! -z "$TRAVIS" ) ; then
+  if [ -n "$KEY" ] && [ -n "$TRAVIS" ] ; then
     wget https://github.com/AppImage/AppImageKit/files/584665/data.zip -O data.tar.gz.gpg
-    ( set +x ; echo $KEY | gpg2 --batch --passphrase-fd 0 --no-tty --skip-verify --output data.tar.gz --decrypt data.tar.gz.gpg )
+    ( set +x ; echo "$KEY" | gpg2 --batch --passphrase-fd 0 --no-tty --skip-verify --output data.tar.gz --decrypt data.tar.gz.gpg )
     tar xf data.tar.gz
-    sudo chown -R $USER .gnu*
-    mv $HOME/.gnu* $HOME/.gnu_old ; mv .gnu* $HOME/
-    VERSION=$VERSION_EXPANDED "$appimagetool" $@ -n -s --bintray-user $BINTRAY_USER --bintray-repo $BINTRAY_REPO -v ./$APP.AppDir/
+    sudo chown -R "$USER" .gnu*
+    mv "$HOME/.gnu"* "$HOME/.gnu_old"
+    mv .gnu* "$HOME"
+    VERSION=$VERSION_EXPANDED "$appimagetool" "$@" -n -s --bintray-user "$BINTRAY_USER" --bintray-repo "$BINTRAY_REPO" -v "./$APP.AppDir/"
   else
-    VERSION=$VERSION_EXPANDED "$appimagetool" $@ -n --bintray-user $BINTRAY_USER --bintray-repo $BINTRAY_REPO -v ./$APP.AppDir/
+    VERSION=$VERSION_EXPANDED "$appimagetool" "$@" -n --bintray-user "$BINTRAY_USER" --bintray-repo "$BINTRAY_REPO" -v "./$APP.AppDir/"
   fi
   set -x
   mkdir -p ../out/ || true
-  mv *.AppImage* ../out/
+  mv ./*.AppImage* ../out/
 }
 
 # Generate status file for use by apt-get; assuming that the recipe uses no newer
@@ -253,9 +259,10 @@ generate_status()
   mkdir -p ./tmp/lists/partial
   touch tmp/pkgcache.bin tmp/srcpkgcache.bin
   wget -q -c "https://github.com/AppImage/AppImages/raw/${PKG2AICOMMIT}/excludedeblist"
-  rm status 2>/dev/null || true
-  for PACKAGE in $(cat excludedeblist | cut -d "#" -f 1) ; do
-    printf "Package: $PACKAGE\nStatus: install ok installed\nArchitecture: all\nVersion: 9:999.999.999\n\n" >> status
+  rm -f status
+  sed -e 's/#.*//g' -e 's/[[:blank:]]//g' -e '/^$/d' excludedeblist | while IFS= read -ra PACKAGE
+  do
+    printf "Package: %s\nStatus: install ok installed\nArchitecture: all\nVersion: 9:999.999.999\n\n" "$PACKAGE" >> status
   done
 }
 
@@ -268,53 +275,70 @@ get_desktop()
 fix_desktop() {
     # fix trailing semicolons
     for key in Actions Categories Implements Keywords MimeType NotShowIn OnlyShowIn; do
-      sed -i '/'"$key"'.*[^;]$/s/$/;/' $1
+      sed -i '/'"$key"'.*[^;]$/s/$/;/' "$1"
     done
 }
 
 # Find the icon file and copy it to the AppDir
 get_icon()
 {
-  find ./usr/share/pixmaps/$LOWERAPP.png -exec cp {} . \; 2>/dev/null || true
-  find ./usr/share/icons -path *64* -name $LOWERAPP.png -exec cp {} . \; 2>/dev/null || true
-  find ./usr/share/icons -path *128* -name $LOWERAPP.png -exec cp {} . \; 2>/dev/null || true
-  find ./usr/share/icons -path *512* -name $LOWERAPP.png -exec cp {} . \; 2>/dev/null || true
-  find ./usr/share/icons -path *256* -name $LOWERAPP.png -exec cp {} . \; 2>/dev/null || true
-  ls -lh $LOWERAPP.png || true
+  cp "./usr/share/pixmaps/$LOWERAPP.png" . 2>/dev/null || true
+  find ./usr/share/icons -path '*64*' -name "$LOWERAPP.png" -exec cp {} . \; 2>/dev/null || true
+  find ./usr/share/icons -path '*128*' -name "$LOWERAPP.png" -exec cp {} . \; 2>/dev/null || true
+  find ./usr/share/icons -path '*512*' -name "$LOWERAPP.png" -exec cp {} . \; 2>/dev/null || true
+  find ./usr/share/icons -path '*256*' -name "$LOWERAPP.png" -exec cp {} . \; 2>/dev/null || true
+  ls -lh "$LOWERAPP.png" || true
 }
 
 # Find out the version
 get_version()
 {
-  THEDEB=$(find ../*.deb -name $LOWERAPP"_*" | head -n 1)
+  THEDEB=$(find ../*.deb -name "$LOWERAPP_*" | head -n 1)
   if [ -z "$THEDEB" ] ; then
     echo "Version could not be determined from the .deb; you need to determine it manually"
   fi
-  VERSION=$(echo $THEDEB | cut -d "~" -f 1 | cut -d "_" -f 2 | cut -d "-" -f 1 | sed -e 's|1%3a||g' | sed -e 's|.dfsg||g' )
-  echo $VERSION
+  VERSION=$(echo "$THEDEB" | cut -d "~" -f 1 | cut -d "_" -f 2 | cut -d "-" -f 1 | sed -e 's|1%3a||g' | sed -e 's|.dfsg||g' )
+  echo "$VERSION"
 }
 
 # transfer.sh
-transfer() { if [ $# -eq 0 ]; then echo "No arguments specified. Usage:\necho transfer /tmp/test.md\ncat /tmp/test.md | transfer test.md"; return 1; fi
-tmpfile=$( mktemp -t transferXXX ); if tty -s; then basefile=$(basename "$1" | sed -e 's/[^a-zA-Z0-9._-]/-/g'); curl --progress-bar --upload-file "$1" "https://transfer.sh/$basefile" >> $tmpfile; else curl --progress-bar --upload-file "-" "https://transfer.sh/$1" >> $tmpfile ; fi; cat $tmpfile; rm -f $tmpfile; }
+transfer()
+{
+  if [ $# -eq 0 ]; then
+    echo "No arguments specified. Usage:"
+    echo "  transfer /tmp/test.md"
+    echo "  cat /tmp/test.md | transfer test.md"
+    return 1
+  fi
+  tmpfile=$(mktemp -t transferXXX)
+  if tty -s; then
+    basefile=$(basename "$1" | sed -e 's/[^a-zA-Z0-9._-]/-/g')
+    curl --progress-bar --upload-file "$1" "https://transfer.sh/$basefile" >> "$tmpfile"
+  else
+    curl --progress-bar --upload-file "-" "https://transfer.sh/$1" >> "$tmpfile"
+  fi
+  cat "$tmpfile"
+  rm -f "$tmpfile"
+}
 
 # Patch binary files; fill with padding if replacement is shorter than original
 # http://everydaywithlinux.blogspot.de/2012/11/patch-strings-in-binary-files-with-sed.html
 # Example: patch_strings_in_file foo "/usr/local/lib/foo" "/usr/lib/foo"
-patch_strings_in_file() {
+patch_strings_in_file()
+{
     local FILE="$1"
     local PATTERN="$2"
     local REPLACEMENT="$3"
     # Find all unique strings in FILE that contain the pattern
-    STRINGS=$(strings ${FILE} | grep ${PATTERN} | sort -u -r)
+    STRINGS=$(strings "${FILE}" | grep "${PATTERN}" | sort -u -r)
     if [ "${STRINGS}" != "" ] ; then
         echo "File '${FILE}' contain strings with '${PATTERN}' in them:"
         for OLD_STRING in ${STRINGS} ; do
             # Create the new string with a simple bash-replacement
             NEW_STRING=${OLD_STRING//${PATTERN}/${REPLACEMENT}}
             # Create null terminated ASCII HEX representations of the strings
-            OLD_STRING_HEX="$(echo -n ${OLD_STRING} | xxd -g 0 -u -ps -c 256)00"
-            NEW_STRING_HEX="$(echo -n ${NEW_STRING} | xxd -g 0 -u -ps -c 256)00"
+            OLD_STRING_HEX="$(echo -n "${OLD_STRING}" | xxd -g 0 -u -ps -c 256)00"
+            NEW_STRING_HEX="$(echo -n "${NEW_STRING}" | xxd -g 0 -u -ps -c 256)00"
             if [ ${#NEW_STRING_HEX} -le ${#OLD_STRING_HEX} ] ; then
                 # Pad the replacement string with null terminations so the
                 # length matches the original string
@@ -323,11 +347,11 @@ patch_strings_in_file() {
                 done
                 # Now, replace every occurrence of OLD_STRING with NEW_STRING
                 echo -n "Replacing ${OLD_STRING} with ${NEW_STRING}... "
-                hexdump -ve '1/1 "%.2X"' ${FILE} | \
+                hexdump -ve '1/1 "%.2X"' "${FILE}" | \
                 sed "s/${OLD_STRING_HEX}/${NEW_STRING_HEX}/g" | \
-                xxd -r -p > ${FILE}.tmp
-                chmod --reference ${FILE} ${FILE}.tmp
-                mv ${FILE}.tmp ${FILE}
+                xxd -r -p > "${FILE}.tmp"
+                chmod --reference "${FILE}" "${FILE}.tmp"
+                mv "${FILE}.tmp" "${FILE}"
                 echo "Done!"
             else
                 echo "New string '${NEW_STRING}' is longer than old" \
